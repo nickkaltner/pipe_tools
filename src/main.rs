@@ -7,7 +7,6 @@ use std::io::{self, BufRead, Write};
 use std::os::unix::io::AsRawFd;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 
 struct StatusArea {
     status_lines: Vec<String>,
