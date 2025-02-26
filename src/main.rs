@@ -28,38 +28,49 @@ impl StatusArea {
     }
 
     fn redraw(&self) {
-        let mut stdout = io::stdout();
+        // Use /dev/tty for status updates instead of stdout
+        let mut term_out = OpenOptions::new()
+            .write(true)
+            .open("/dev/tty")
+            .expect("Could not open /dev/tty for writing");
+
         let (_, rows) = get_terminal_size().unwrap();
 
         // save the current cursor position
-        write!(stdout, "\x1B[s").unwrap();
+        write!(term_out, "\x1B[s").unwrap();
 
         // Move cursor to the beginning of the status area
-        write!(stdout, "\x1B[{};1H", rows - 2).unwrap();
-        write!(stdout, "\x1b[44m").unwrap();
+        write!(term_out, "\x1B[{};1H", rows - 2).unwrap();
+        write!(term_out, "\x1b[44m").unwrap();
 
         // Clear the status area
         for _ in 0..3 {
-            write!(stdout, "\x1B[2K").unwrap(); // Clear the current line
-            write!(stdout, "\x1B[1B").unwrap(); // Move cursor down one line
+            write!(term_out, "\x1B[2K").unwrap(); // Clear the current line
+            write!(term_out, "\x1B[1B").unwrap(); // Move cursor down one line
         }
 
         // Move cursor back to the beginning of the status area
-        write!(stdout, "\x1B[{};1H", rows - 2).unwrap();
+        write!(term_out, "\x1B[{};1H", rows - 2).unwrap();
 
         // Print the status lines
         for line in &self.status_lines {
-            writeln!(stdout, "{}", line).unwrap();
+            writeln!(term_out, "{}", line).unwrap();
         }
 
         // Reset scroll region
-        set_scroll_region(0, rows - 4).unwrap();
+        set_scroll_region_on_term(&mut term_out, 0, rows - 4).unwrap();
 
         // restore the cursor position
-        write!(stdout, "\x1B[u").unwrap();
-        write!(stdout, "\x1b[0m").unwrap();
-        //let a = crossterm::terminal::get_cursor_position().unwrap();
+        write!(term_out, "\x1B[u").unwrap();
+        write!(term_out, "\x1b[0m").unwrap();
     }
+}
+
+// Add this helper function for setting scroll region on /dev/tty
+fn set_scroll_region_on_term<W: Write>(term: &mut W, top: u16, bottom: u16) -> io::Result<()> {
+    write!(term, "\x1B[{};{}r", top + 1, bottom + 1)?;
+    term.flush()?;
+    Ok(())
 }
 
 fn set_scroll_region(top: u16, bottom: u16) -> io::Result<()> {
@@ -251,7 +262,7 @@ fn main() -> io::Result<()> {
                     }
                     Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                         // No data available yet
-                        thread::sleep(Duration::from_millis(10));
+                        // thread::sleep(Duration::from_millis(10));
                     }
                     Err(_) => break, // Error reading, exit thread
                     Ok(0) => break,  // End of file
